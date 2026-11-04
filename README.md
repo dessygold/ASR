@@ -25,3 +25,19 @@ If this application requires substantial work, additional CODEOWNERS can be adde
 
 Team members that pick up issues should make sure to add the start/end dates and track time spent. These metrics will help DSOP leadership revise sprint management, capacity planning, etc.
 
+########################
+Work item for nexus Grafana
+
+Nexus IQ Grafana Dashboard
+Open
+  Issue created 1 month ago by Tyler Greene
+Summary
+Create or import a Grafana dashboard for this application
+
+Definition of done
+metrics are ingested into Victoria stack, verified in Grafana Explore
+key metrics identified
+dashboard created or imported
+data source, metrics queries validated
+Notes
+Requires metrics endpoints to be exposed and Victoria scrape manifests applied
