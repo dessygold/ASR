@@ -1,112 +1,19 @@
-King, Nicholas Joseph (Nick) CTR USARMY ASIC (USA)
+Hi , I’ve picked up the Nexus IQ Grafana Dashboard work item and want to confirm the approach with you before I build anything.
 
-Osatuyi, Mobayode D CTR USARMY ASIC (USA)
-Nicholas King
+What I know
 
-Infrastructure Engineer/System Admin
+Sonatype confirmed on Nov 3 that IQ has no native Prometheus endpoint. Its metrics are JSON only, at :8071/metrics, and we have to convert them ourselves. They’ve opened a feature request, with no timeline.
+The existing nexusiq-overview dashboard in grafana-dashboards looks like a copy of the Jira/Confluence one (Atlassian/Tomcat metric names, job="nexusiq"). In Grafana it shows No data or N/A, and its default data source isn’t set to VictoriaMetrics.
+IQ isn’t deployed in dev (app-nexusiq.yaml skips dev), so I’d validate in test.
+Nexus Repository has a scrape manifest in support-manifests. IQ doesn’t, and it has no basic auth on 8071, so Nexus’s file can’t just be copied.
+Options I see
 
-CACI
+json_exporter, as a sidecar or separate pod, with a VMServiceScrape in the nexus-iq repo’s support-manifests. Metrics land in Victoria, which meets the work item. It needs a new image through ECR and cDSO, and I haven’t confirmed whether the IQ chart allows a sidecar.
+Grafana Infinity plugin (Bob has used it), which queries IQ’s JSON directly from Grafana. It’s quicker, but it’s a third-party plugin, it bypasses Victoria, and Core’s Grafana would need network access to IQ’s admin port in Enterprise.
+Another approved exporter or translation method, if you know one, or wait for Sonatype’s native support (not realistic soon).
+What I need from you
 
-Nicholas.j.king16.ctr@army.mil
-
-From: Zachary Corbin <zcorbin@sonatype.com>
-Sent: Tuesday, November 3, 2026 3:37 PM
-To: Fasolo, Joseph G (Joe) CTR USARMY ASIC (USA) <joseph.g.fasolo.ctr@army.mil>
-Cc: obarnes@sonatype.com; Clingan, Robert L (Bob) CIV USARMY ASIC (USA) <robert.l.clingan6.civ@army.mil>; King, Nicholas Joseph (Nick) CTR USARMY ASIC (USA) <nicholas.j.king16.ctr@army.mil>
-Subject: Re: Sonatype Lifeycle Grafana Export
-
- 
-
-
-
-You don't often get email from zcorbin@sonatype.com. Learn why this is important
-
-Hey Joe,
-
- 
-
-Thanks for reaching out. Unfortunately you will have to convert the JSON into Prometheus yourself. Most customers using Grafana are looking to use it with NXRM but not LC which is why the feature was added a few years ago to NXRM.
-
- 
-
-I'll make sure to open a Feature Request for you to have this added to LC.
-
- 
-
-Please do not hesitate to reach out if you have any further questions!
-
- 
-
-Best,
-
- 
-
-
-
-Image removed by sender. Sonatype
-
-Zach Corbin
-Customer Success Manager
-Office: (301) 684-8080 ext. 656
-
-On Tue, Nov 3, 2026 at 12:54 PM Fasolo, Joseph G (Joe) CTR USARMY ASIC (USA) <joseph.g.fasolo.ctr@army.mil> wrote:
-
-Hey Zach,
-
- 
-
-Just a quick question re: Grafana.
-
- 
-
-We’re setting up dashboards in Grafana and have been successful with Nexus Repository Manager, but not so much with Sonatype Lifecycle.
-
- 
-
-Sonabot had this to say on the matter:
-
- 
-
-Sonatype Lifecycle (IQ Server) and Nexus Repository handle Prometheus integration differently:
-
-Nexus Repository has a native Prometheus endpoint that directly exports metrics in Prometheus format:
-
-/service/rest/metrics/prometheus (v3.81.0+)
-/service/metrics/prometheus (v3.19.0–3.80.0)
-
-
-Prometheus docs
-
-
-
-Metrics REST API
-
-Sonatype Lifecycle (IQ Server) does not have a native Prometheus endpoint. Its metrics API returns data in JSON format only:
-
-http://localhost:8071/metrics?pretty=true
-
-The documentation explicitly notes that while Prometheus cannot natively consume this JSON output, integration is possible through the use of exporters (for example, json_exporter) that transform the JSON output into a Prometheus-compatible format.
-
-
-
-Operational Menu
-
-In summary: Nexus Repository supports Prometheus natively, while Lifecycle requires an intermediate exporter (like json_exporter) to bridge the JSON metrics output into a Prometheus-compatible format.
-
- 
-
-So, my question: do you guys have a pre-made setup for Sonatype Lifecycle that I can import into Grafana? Or are we stuck building out the exporters manually? I was hoping you or your support staff might have a neat little library of dashboards that can be exported/imported. Just thought I’d ask before going through the lengthy process of building this stuff out by hand.
-
- 
-
-Thanks!
-
- 
-
-Sincerely,
-
-DSOP SERVICE DESK
-
-Joe Fasolo
-
-CACI Technologies, LLC
+Which option do you prefer? Are third-party Grafana plugins like Infinity allowed?
+If it’s the exporter route, where should it live: its own app repo (like yace) or in nexus-iq?
+Can you point me to the right data source and how you validate metrics in test (I saw your TODO about port-forwarding to vmselect)?
+Can I get access to the test Grafana and Explore to check what Victoria already has for the nexusiq namespace?
