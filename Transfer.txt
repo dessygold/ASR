@@ -1,40 +1,99 @@
-Hi Gary , I am currently working on getting the  Nexus IQ Grafana Dashboard configured.
+DSOP/Development/Gitops/Enterprise Application/ app-of-apps/Templates/app-nexusiq-ha.yaml 
 
-i was told that nexus iq doesn't have a native setup to export metrics into Grafana like the setup for nexus
- 
-Sonatype confirmed that IQ has no native Prometheus endpoint. Its metrics are JSON only, at :8071/metrics, and we have to convert them ourselves. They’ve opened a feature request, with no timeline.
- 
-The options i see are below
- 
-1. Grafana Infinity plugin (i was told Bob Clingan mentioned there's a plugin that he used to do it in the past called Infinity, but I don't know what our stance is on third-party plugins for Grafana), which queries IQ’s JSON directly from Grafana. It’s quicker, but it’s a third-party plugin, it bypasses Victoria, and Core’s Grafana would need network access to IQ’s admin port in Enterprise.
- 
-2. json_exporter, as a sidecar or separate pod, with a VMServiceScrape in the nexus-iq repo’s support-manifests.
- 
- 
-3. Another approved exporter or translation method, if you know one, or wait for Sonatype’s native support (not realistic soon).
- 
-So i was told to reachout to one of the codeowners to seek advice on the best approach 
+# deploy to test and prod
+{{- if ne .Values.environment "dev" }}
 
-I will appreciate any advice
- 
-Thanks
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: nexusiq
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  labels:
+    system: {{ .Values.system }}
+    component: application
+spec:
+  project: {{ .Values.system }}
+  sources:
+    - repoURL: 186542266927.dkr.ecr.us-gov-west-1.amazonaws.com # core-test
+      chart: charts/nexus-iq-server-ha
+      targetRevision: 209.0.0
+      helm:
+        valueFiles:
+          - $values/helm-values/values.yaml
+          - $values/helm-values/values-{{ .Values.environment }}.yaml
+    - repoURL: https://code.cdso.army.mil/dsop/apps/nexusiq-ha.git
+      targetRevision: main
+      ref: values
+    # support manifests
+    - repoURL: https://code.cdso.army.mil/dsop/apps/nexusiq-ha.git
+      targetRevision: main
+      path: support-manifests
+  destination:
+    name: {{ .Values.system }}
+    namespace: nexusiq
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+    # avoid syncing db migration job more than once
+    - ApplyOutOfSyncOnly=true
 
- 
-Good Morning
- 
-I was checking to see if you were able to review the previous message above in regards to the NexusIQ Grafana dashboard metrics
- 
-Thanks
- 
-Good afternoon, Mobayode. Apologies for the delayed response.
- 
-I reviewed the options you provided, and I'm leaning toward Option 2, using a JSON-to-Prometheus exporter with VMServiceScrape. This would align better with our existing VictoriaMetrics monitoring architecture and avoid introducing another third-party dependency into Grafana.
- 
-Before moving forward, I'd recommend validating the JSON output from the Nexus IQ metrics endpoint to confirm compatibility with the exporter. We'd also want to account for authentication, network connectivity, and any security considerations.
- 
-I think deploying the exporter as a sidecar or standalone pod would be a reasonable approach, depending on how Nexus IQ is currently deployed.
- 
-Do we know if anyone has already tested the json_exporter against the IQ metrics endpoint? That would probably be my starting point before committing to the implementation.
- 
-Let me know your thoughts.
- 
+{{- end }}
+
+
+
+
+
+PROD YAML
+# deploy to test and prod
+{{- if ne .Values.environment "dev" }}
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: nexusiq
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  labels:
+    system: {{ .Values.system }}
+    component: application
+spec:
+  project: {{ .Values.system }}
+  sources:
+    - repoURL: 186542266927.dkr.ecr.us-gov-west-1.amazonaws.com # core-test
+      chart: charts/nexus-iq-server-ha
+      targetRevision: 209.0.0
+      helm:
+        valueFiles:
+          - $values/helm-values/values.yaml
+          - $values/helm-values/values-{{ .Values.environment }}.yaml
+    - repoURL: https://code.cdso.army.mil/dsop/apps/nexusiq-ha.git
+      targetRevision: main
+      ref: values
+    # support manifests
+    - repoURL: https://code.cdso.army.mil/dsop/apps/nexusiq-ha.git
+      targetRevision: main
+      path: support-manifests
+  destination:
+    name: {{ .Values.system }}
+    namespace: nexusiq
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+    # avoid syncing db migration job more than once
+    - ApplyOutOfSyncOnly=true
+
+{{- end }}
+
