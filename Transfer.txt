@@ -97,3 +97,15 @@ spec:
 
 {{- end }}
 
+
+
+##############################
+TEAMS CHAT
+ we don't need the infinity data source. i'm not sure why these other folks are dragged into this chat.  who mentioned a wishlist? send me a link to Victoria metrics wishlist
+ 
+there's already a native tool available
+ 
+and i already fixed the deployment, enabled the metrics in the container without any additional Grafana datasource, updated the scrape and we have metrics coming into VM, seen through Grafana explore
+ 
+ 
+ 
