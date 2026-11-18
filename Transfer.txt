@@ -1,10 +1,132 @@
-Good afternoon Joe, i wanted to check to see if you have a few to chat, this is in regards to the nexusiq Grafana dashboard, i wanted to check in regards to the prod deployment for the nexusiq grfana dashboard, Tyler did mention that you will be deploying a different IQ version in prod from the Test version, i just wanted to check with you to validate if the Nexus IQ scrape is deployed to prod. Thanks
- 
-The NexusIQ scrape is deployed to Production, but the Grafana dashboard has already been handled. It's live in Grafana Test and deployed as a dashboard in the Grafana Dashboards Gitlab projects, so it should populate in Grafana prod whenever that gets fixed up.
- 
-Sounds great, thank you for the feedback
- 
-when do you think it should be fixed?
- 
-Unsure. I'm not a code owner on Grafana and don't actively work on it. You'd have to speak to a code owner about it.
- 
+This confirms the exact RDS metric labels needed for the Nexus IQ test database. The database metrics should be queried from:
+
+job="yace"
+cluster="enterprise-test-cluster"
+tag_Application="Nexus IQ"
+tag_Environment="test"
+Do not use the Nexus IQ Pod labels for these database panels:
+
+job="nexusiq"
+namespace="nexusiq"
+pod=...
+Those apply to the Nexus IQ application scrape, while the database metrics come from the YACE/CloudWatch scrape.
+
+Code changes for nexusiq.yaml
+1. Replace the current Database Latency panel targets
+The current panel is not actually measuring latency; it is attempting to calculate HikariCP/DBCP connection-pool utilization.
+
+Replace the targets section for panel ID 38 with the following:
+
+"targets": [
+  {
+    "datasource": {
+      "type": "prometheus",
+      "uid": "$datasource"
+    },
+    "editorMode": "code",
+    "expr": "aws_rds_read_latency_average{job=\"yace\", cluster=\"enterprise-test-cluster\", tag_Application=\"Nexus IQ\", tag_Environment=\"test\"} * 1000",
+    "legendFormat": "Read Latency",
+    "range": true,
+    "refId": "A"
+  },
+  {
+    "datasource": {
+      "type": "prometheus",
+      "uid": "$datasource"
+    },
+    "editorMode": "code",
+    "expr": "aws_rds_write_latency_average{job=\"yace\", cluster=\"enterprise-test-cluster\", tag_Application=\"Nexus IQ\", tag_Environment=\"test\"} * 1000",
+    "legendFormat": "Write Latency",
+    "range": true,
+    "refId": "B"
+  }
+]
+Keep the panel title:
+
+"title": "Database Latency"
+Keep or set the field unit to:
+
+"unit": "ms"
+The * 1000 is needed because AWS RDS read/write latency values are measured in seconds, while the Grafana panel is configured to display milliseconds. AWS documents RDS ReadLatency and WriteLatency in seconds. 
+amazon.com
++1
+
+2. Replace the current Database Reads / Writes panel targets
+The current panel uses Atlassian and HikariCP metrics, which do not apply to Nexus IQ. Replace the targets section for panel ID 36 with:
+
+"targets": [
+  {
+    "datasource": {
+      "type": "prometheus",
+      "uid": "$datasource"
+    },
+    "editorMode": "code",
+    "exemplar": true,
+    "expr": "aws_rds_read_iops_average{job=\"yace\", cluster=\"enterprise-test-cluster\", tag_Application=\"Nexus IQ\", tag_Environment=\"test\"}",
+    "interval": "",
+    "legendFormat": "Read IOPS",
+    "range": true,
+    "refId": "A"
+  },
+  {
+    "datasource": {
+      "type": "prometheus",
+      "uid": "$datasource"
+    },
+    "editorMode": "code",
+    "exemplar": true,
+    "expr": "aws_rds_write_iops_average{job=\"yace\", cluster=\"enterprise-test-cluster\", tag_Application=\"Nexus IQ\", tag_Environment=\"test\"}",
+    "interval": "",
+    "legendFormat": "Write IOPS",
+    "range": true,
+    "refId": "B"
+  }
+]
+Update the panel title to:
+
+"title": "Database Read / Write IOPS"
+You can retain:
+
+"unit": "none"
+or configure the appropriate IOPS unit in the Grafana panel field settings if your dashboard standards define one.
+
+
+
+Important production consideration
+The supplied queries are validated for Enterprise Test only because they use:
+
+cluster="enterprise-test-cluster"
+tag_Environment="test"
+Before using the same code for production, validate the production RDS labels with:
+
+aws_rds_info{
+  cluster="enterprise-prod-cluster",
+  job="yace",
+  tag_Application="Nexus IQ"
+}
+Then update the production dashboard query with the production cluster/environment values, or add appropriate dashboard variables if the same dashboard definition must support both test and production.
+
+Handoff overview for the next agent
+Nexus IQ Pod/JMX scrape uses job="nexusiq" and exposes JVM/JMX metrics only.
+
+Nexus IQ database metrics are not in the JMX scrape.
+
+The Nexus IQ backend is external PostgreSQL/RDS.
+
+Database infrastructure metrics are already collected by YACE from AWS CloudWatch under:
+
+job="yace"
+The Nexus IQ test RDS resource is uniquely identifiable through:
+
+cluster="enterprise-test-cluster"
+tag_Application="Nexus IQ"
+tag_Environment="test"
+Existing database panels use unsupported Atlassian/HikariCP metrics and should be replaced with:
+
+aws_rds_read_latency_average
+aws_rds_write_latency_average
+aws_rds_read_iops_average
+aws_rds_write_iops_average
+aws_rds_database_connections_average
+Use * 1000 for RDS read/write latency panels if the Grafana panel unit remains milliseconds.
+
