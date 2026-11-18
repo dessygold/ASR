@@ -1210,7 +1210,7 @@ spec:
                 "uid": "$datasource"
               },
               "editorMode": "code",
-              "expr": "aws_rds_read_latency_average{job=\"yace\", cluster=~\"${cluster:regex}\", tag_Application=\"Nexus IQ\", tag_Environment=~\"${environment:regex}\"} * 1000",
+              "expr": "aws_rds_read_latency_average{\r\n  job=\"yace\",\r\n  cluster=~\"$cluster\",\r\n  tag_Application=\"Nexus IQ\",\r\n  tag_Environment=~\"$environment\"\r\n} * 1000",
               "legendFormat": "Read Latency",
               "range": true,
               "refId": "A"
@@ -1221,7 +1221,7 @@ spec:
                 "uid": "$datasource"
               },
               "editorMode": "code",
-              "expr": "aws_rds_write_latency_average{job=\"yace\", cluster=~\"${cluster:regex}\", tag_Application=\"Nexus IQ\", tag_Environment=~\"${environment:regex}\"} * 1000",
+              "expr": "aws_rds_write_latency_average{\r\n  job=\"yace\",\r\n  cluster=~\"$cluster\",\r\n  tag_Application=\"Nexus IQ\",\r\n  tag_Environment=~\"$environment\"\r\n} * 1000",
               "legendFormat": "Write Latency",
               "range": true,
               "refId": "B"
@@ -1332,7 +1332,7 @@ spec:
               },
               "editorMode": "code",
               "exemplar": true,
-              "expr": "aws_rds_read_iops_average{job=\"yace\", cluster=~\"${cluster:regex}\", tag_Application=\"Nexus IQ\", tag_Environment=~\"${environment:regex}\"}",
+              "expr": "aws_rds_read_iops_average{\r\n  job=\"yace\",\r\n  cluster=~\"$cluster\",\r\n  tag_Application=\"Nexus IQ\",\r\n  tag_Environment=~\"$environment\"\r\n}",
               "interval": "",
               "legendFormat": "Read IOPS",
               "range": true,
@@ -1345,7 +1345,7 @@ spec:
               },
               "editorMode": "code",
               "exemplar": true,
-              "expr": "aws_rds_write_iops_average{job=\"yace\", cluster=~\"${cluster:regex}\", tag_Application=\"Nexus IQ\", tag_Environment=~\"${environment:regex}\"}",
+              "expr": "aws_rds_write_iops_average{\r\n  job=\"yace\",\r\n  cluster=~\"$cluster\",\r\n  tag_Application=\"Nexus IQ\",\r\n  tag_Environment=~\"$environment\"\r\n}",
               "interval": "",
               "legendFormat": "Write IOPS",
               "range": true,
@@ -1474,18 +1474,14 @@ spec:
           {
             "allowCustomValue": true,
             "current": {
-              "text": [
-                "All"
-              ],
-              "value": [
-                "$__all"
-              ]
+              "text": "",
+              "value": ""
             },
             "datasource": {
               "type": "prometheus",
               "uid": "$datasource"
             },
-            "definition": "label_values(aws_rds_info{job=\"yace\", tag_Application=\"Nexus IQ\"}, cluster)",
+            "definition": "label_values(aws_rds_read_iops_average{job=\"yace\", tag_Application=\"Nexus IQ\"}, cluster)",
             "hide": 0,
             "includeAll": true,
             "label": "Cluster",
@@ -1494,7 +1490,7 @@ spec:
             "options": [],
             "query": {
               "qryType": 0,
-              "query": "label_values(aws_rds_info{job=\"yace\", tag_Application=\"Nexus IQ\"}, cluster)",
+              "query": "label_values(aws_rds_read_iops_average{job=\"yace\", tag_Application=\"Nexus IQ\"}, cluster)",
               "refId": "PrometheusVariableQueryEditor-VariableQuery"
             },
             "refresh": 1,
@@ -1507,18 +1503,14 @@ spec:
           {
             "allowCustomValue": true,
             "current": {
-              "text": [
-                "All"
-              ],
-              "value": [
-                "$__all"
-              ]
+              "text": "",
+              "value": ""
             },
             "datasource": {
               "type": "prometheus",
               "uid": "$datasource"
             },
-            "definition": "label_values(aws_rds_info{job=\"yace\", tag_Application=\"Nexus IQ\", cluster=~\"${cluster:regex}\"}, tag_Environment)",
+            "definition": "label_values(aws_rds_read_iops_average{job=\"yace\", tag_Application=\"Nexus IQ\", cluster=~\"$cluster\"}, tag_Environment)",
             "hide": 0,
             "includeAll": true,
             "label": "Environment",
@@ -1527,7 +1519,7 @@ spec:
             "options": [],
             "query": {
               "qryType": 0,
-              "query": "label_values(aws_rds_info{job=\"yace\", tag_Application=\"Nexus IQ\", cluster=~\"${cluster:regex}\"}, tag_Environment)",
+              "query": "label_values(aws_rds_read_iops_average{job=\"yace\", tag_Application=\"Nexus IQ\", cluster=~\"$cluster\"}, tag_Environment)",
               "refId": "PrometheusVariableQueryEditor-VariableQuery"
             },
             "refresh": 1,
@@ -1562,4 +1554,3 @@ spec:
       "uid": "nexusiq",
       "id": "null"
     }
-
