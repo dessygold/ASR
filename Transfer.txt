@@ -1,97 +1,58 @@
-Nexus IQ Database Dashboard Update – Test and Production
+Using a similar Application Kyverno deployment.md as reference, see below
+# Deployment
 
-Please update the Database section of the dedicated nexusiq.yaml Grafana dashboard to use AWS RDS metrics collected through YACE.
+This document describes the deployment process for `Kyverno`.
 
-The Nexus IQ application Pod/JMX scrape (job="nexusiq") does not expose database, JDBC, HikariCP, DBCP2, SQL, or connection-pool metrics. The current database panels use Atlassian/HikariCP metrics and are not applicable to Nexus IQ.
+## Overview
 
-Nexus IQ database metrics are available through the CloudWatch/YACE scrape path:
+[`Kyverno`](https://kyverno.io/docs/introduction/) is a Kubernetes-native policy engine. Policies are plain Kubernetes resources (`ClusterPolicy`, `Policy`, and the newer `policies.kyverno.io` CRDs such as `ValidatingPolicy`/`ImageValidatingPolicy`/`MutatingPolicy`/`GeneratingPolicy`) written in YAML or CEL — no new language to learn, no sidecar to inject. Kyverno validates, mutates, generates, and cleans up resources by intercepting the Kubernetes API via admission webhooks and by periodically re-scanning the cluster in the background.
 
-job="yace"
-tag_Application="Nexus IQ"
-The RDS metrics were validated in both Enterprise Test and Enterprise Production. The environment-specific labels are:
+The chart installs four components, each with its own Deployment/CronJob:
 
-Test:
-cluster="enterprise-test-cluster"
-tag_Environment="test"
+- **admission-controller** — the core component. Runs the validating/mutating admission webhooks that inspect requests synchronously as they hit the API server.
+- **background-controller** — re-evaluates existing (already-admitted) resources against policies on an interval, and handles `generate`/`mutate-existing` policy rules that act outside the request path.
+- **cleanup-controller** — executes `CleanupPolicy`/`ClusterCleanupPolicy` resources on a schedule (similar shape to a CronJob).
+- **reports-controller** — rolls up per-resource `EphemeralReport`/`ClusterEphemeralReport` objects into `PolicyReport`/`ClusterPolicyReport` (and OpenReports) so compliance status is queryable cluster-wide.
 
-Production:
-cluster="enterprise-prod-cluster"
-tag_Environment="prod"
-Because the same nexusiq.yaml dashboard is deployed to both test and production, please do not hard-code either the test or production cluster/environment values. Use the existing dashboard cluster/environment variables if available; otherwise, add appropriate dashboard variables and use them in the RDS queries.
+See [diagram.md](../diagram.md) for the request/report flow.
 
-Recommended common RDS selector:
+- [Kyverno installation guide](https://kyverno.io/docs/installation/methods/)
+- [Kyverno policy types](https://kyverno.io/docs/policy-types/overview/)
+- [Kyverno CRDs](https://github.com/kyverno/kyverno/tree/main/config/crds)
 
-job="yace",
-cluster=~"${cluster:regex}",
-tag_Application="Nexus IQ",
-tag_Environment=~"${environment:regex}"
-If the dashboard does not currently have $cluster and $environment variables, please add them or use the existing dashboard/environment variable convention used by other Grafana dashboards.
+## How we deploy it to DSOP
 
-Do not use these Nexus IQ application-Pod filters in the RDS panel queries:
+Kyverno is deployed via the standard `dsop/pipelines` external-application pipeline (see [.gitlab-ci.yml](../.gitlab-ci.yml)), which pulls the chart from the upstream Helm repo (`https://kyverno.github.io/kyverno/`, set via `SOURCE_HELM_REPO`) rather than an OCI registry.
 
-job="nexusiq"
-namespace="nexusiq"
-pod=~"$pod"
-The RDS metrics are emitted by YACE in the monitoring namespace and are associated with Nexus IQ through the RDS tags and cluster labels.
+- Container images are re-pointed at our GovCloud ECR mirror (`186542266927.dkr.ecr.us-gov-west-1.amazonaws.com/containers/kyverno/*`) in [helm-values/values.yaml](../helm-values/values.yaml), pinned to `v1.18.1` at time of writing. All 7 images used by the chart (admission-controller + its init container, background-controller, cleanup-controller, reports-controller, the CRD-migration job's `kyverno-cli` image, and the `readiness-checker` image used for Helm test/pre-delete hooks) are re-pointed here and registered individually in [cdso_config.yml](../cdso_config.yml).
+- **OpenReports** is enabled (`openreports.enabled: true`, `openreports.installCrds: true`) so policy results surface through the vendor-neutral OpenReports CRDs in addition to Kyverno's native `PolicyReport`.
+- **Reports Server** CRD group support is enabled (`crds.reportsServer.enabled: true`).
+- **Grafana** dashboard creation is enabled (`grafana.enabled: true`, namespace `monitoring`) — see [support-manifests/grafana-dashboard.yaml](../support-manifests/grafana-dashboard.yaml) and [support-manifests/configmap.yaml](../support-manifests/configmap.yaml) (GrafanaFolder).
+- Metrics are scraped via VictoriaMetrics — see [support-manifests/victoria-VMServiceScrape.yaml](../support-manifests/victoria-VMServiceScrape.yaml).
+- No `ExternalSecret` is required for this application (see [support-manifests/external-secret.yaml](../support-manifests/external-secret.yaml) — left intentionally empty).
+- Admission webhook TLS is left on Kyverno's own self-signed cert rotation (`admissionController.certManager.enabled: false`, `createSelfSignedCert: false` — the chart-managed default). cert-manager integration is available but not turned on for this deployment; see [SECURITY.md](./SECURITY.md).
 
-Replace the current Database Latency panel queries—which currently use DBCP2/HikariCP pool metrics—with:
+## Environments
 
-aws_rds_read_latency_average{
-  job="yace",
-  cluster=~"${cluster:regex}",
-  tag_Application="Nexus IQ",
-  tag_Environment=~"${environment:regex}"
-} * 1000
-aws_rds_write_latency_average{
-  job="yace",
-  cluster=~"${cluster:regex}",
-  tag_Application="Nexus IQ",
-  tag_Environment=~"${environment:regex}"
-} * 1000
-Use legends:
+- Deployed to every cluster where Kubernetes policy enforcement is required, configured through the `DSOP/Deployment/Gitops/Shared ApplicationSets` projects
+- Requires no Terraform module and no cloud infrastructure of its own — it only needs an existing Kubernetes cluster with CRD and admission-webhook support.
+- The environment-specific value files ([helm-values/values-dev.yaml](../helm-values/values-dev.yaml), [values-test.yaml](../helm-values/values-test.yaml), [values-prod.yaml](../helm-values/values-prod.yaml)) currently carry no overrides beyond what's applied in the ArgoCD/GitOps Application manifest per cluster — [helm-values/values.yaml](../helm-values/values.yaml) is the shared baseline across all environments.
+- `resyncPeriod: 15m` and `backgroundScanInterval: 1h` (chart defaults, not currently overridden) govern how quickly drift is caught outside the live admission path.
 
-Read Latency
-Write Latency
-Retain/set the unit as:
+## Risks (integrations with other systems)
 
-milliseconds (ms)
-The multiplication by 1000 converts the RDS latency values from seconds to milliseconds.
+- **Admission webhook is in the request path.** Because `admissionController` runs a `ValidatingWebhookConfiguration`/`MutatingWebhookConfiguration` against (by default) most resource kinds, a Kyverno outage or a bad policy can block or mutate unrelated workloads cluster-wide. `config.resourceFilters` and `config.webhooks.namespaceSelector` narrow this, and `kube-system` is excluded by default (`excludeKyvernoNamespace: true`).
+- **Background scan lag.** Anything caught only by the background-controller (rather than at admission time) can sit out of compliance for up to `backgroundScanInterval` (default `1h`) before it's reflected in policy reports.
+- **CRD migration hook.** Helm upgrades run a post-upgrade migration job (`crds.migration.enabled: true`, using the `kyverno-cli` image) against a long list of CRDs — see `default-helm-values.yaml` `crds.migration.resources`. A failed migration job can leave CRDs at a mismatched version relative to the controllers.
 
-Replace the current Database Reads/Writes panel queries—which currently use Atlassian/HikariCP metrics—with:
+## Upgrade Process
 
-aws_rds_read_iops_average{
-  job="yace",
-  cluster=~"${cluster:regex}",
-  tag_Application="Nexus IQ",
-  tag_Environment=~"${environment:regex}"
-}
-aws_rds_write_iops_average{
-  job="yace",
-  cluster=~"${cluster:regex}",
-  tag_Application="Nexus IQ",
-  tag_Environment=~"${environment:regex}"
-}
-Update the panel title to:
+1. Run the CI pipeline to identify new chart/container versions available upstream.
+2. overwrite old default-helm-values.yaml file with new helm chart default values; check to make sure there no code breaking changes or newly required parameters, and check/update any deprecated parameters in use.
+2. Update the container image `tag` key value pair with the new available version in `helm-values/values.yaml`.
+3. navigate to `DSOP/Deployment/Gitops/Shared ApplicationSets/templates/appset-kyverno.yaml` and update template.spec.sources.targetRevision key with the new chart version.
+4. navigate to `DSOP/Deployment/Gitops/Shared ApplicationSets/values-<env>.yaml` and update kyverno.targetRevision key with the new chart version.
+3. Verify rollout in `dev` before promoting to `test`/`prod`
+4. Review the [Kyverno release notes](https://github.com/kyverno/kyverno/releases) for breaking policy/CRD changes — Kyverno has, in past majors, changed policy API groups 
 
-Database Read / Write IOPS
-Use legends:
-
-Read IOPS
-Write IOPS
-Consider adding a separate database connections panel using:
-
-aws_rds_database_connections_average{
-  job="yace",
-  cluster=~"${cluster:regex}",
-  tag_Application="Nexus IQ",
-  tag_Environment=~"${environment:regex}"
-}
-Additional validated RDS metrics available for future Nexus IQ panels include:
-
-aws_rds_cpuutilization_average
-aws_rds_freeable_memory_average
-aws_rds_free_storage_space_average
-aws_rds_disk_queue_depth_average
-aws_rds_read_throughput_average
-aws_rds_write_throughput_average
-Please avoid default 0 for RDS panels during initial implementation. If the YACE/RDS data source is unavailable, the dashboard should show no data rather than a misleading zero value.
+*Note: there is minimal downtime for redeploying kyverno application after an upgrade*
